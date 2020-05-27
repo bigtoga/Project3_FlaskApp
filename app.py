@@ -1,15 +1,24 @@
 from flask import Flask, request, jsonify, make_response
-from flask_restplus import Api, Resource, fields
 from pycaret.classification import *
 import pickle
 import numpy as np
 import pandas as pd
 
-flask_app = Flask(__name__)
+# Bug in Flask - have to add these two lines before importing flask_restplus
+import werkzeug
+werkzeug.cached_property = werkzeug.utils.cached_property
 
-# Load the model w PyCaret
+# Note that flask_restplus requires classes for all routes, not just functions
+from flask_restplus import Api, Resource, fields
+
+app = Flask(__name__)
+api = Api(app = app, 
+		  version = "1.0", 
+		  title = "Project3 Flask App", 
+		  description = "Predict results using a trained model")
+
 # PyCaret automatically adds ".pkl"
-model = load_model('models/et20200526_2010')
+model_file = 'models/et20200526_2010'
 
 # Holdout data
 holdoutData = 'data/holdout-2012.csv'
@@ -35,177 +44,174 @@ feature_cols = [
     , 'worstCreditScore'
 ]
 
-@app.route('/')
-def home():	
-	response = make_response()
-	response.headers.add("Access-Control-Allow-Origin", "*")
-	response.headers.add('Access-Control-Allow-Headers', "*")
-	response.headers.add('Access-Control-Allow-Methods', "*")
+generate_fields = api.model('Generate Files', {
+    'howManyFiles': fields.Integer(
+			required = True
+			, description="How many files should we generate?"
+			, help="Required field"
+			, min=1
+			, max=10
+		)
+	, 'howManyRows': fields.Integer(
+			required = True
+			, description="How many rows in each file?"
+			, help="Required field"
+			, min=10
+			, max=100
+		)
+	, 'fileName': fields.String(
+			required = True
+			, description="What should the files start with?"
+			, help="Required field"
+		)
+})
 
-	routes = {}
-	route_dict = {}
-	route_dict["01-GenerateFiles"] = "/predict_generate_files" 
-	route_dict["02-Predict"] = "/predict" 
-	routes.append(route_dict)
+parser_generate = api.parser()
+parser_generate.add_argument('howManyFiles', type=int, required=True, help='Must be 1-10', location='form')
+parser_generate.add_argument('howManyRows', type=int, required=True, help='Must be 10-100', location='form')
+parser_generate.add_argument('fileName', type=str, required=True, help='Must be 5+ characters', location='form')
 
-	response = jsonify({ \
-		"statusCode": 200 \
-		, "status": "Site is up!" \
-		, "asof": str(data) \
-		, "routes": routes \
-	})
-	
-	return response
+predict_fields = api.model('Predict Inputs', {
+    'randomFile': fields.String(
+			required = True
+			, description="Of the generated files, which one do you choose?"
+			, help="Required field"
+		)
+})
+
+parser_randomFile = api.parser()
+parser_randomFile.add_argument('randomFile', type=str, required=True, help='The random file', location='form')
 
 #########################################################    
 # Pass in the answers and this method will create the 
 #    test files from the holdout data
 #########################################################
-@app.route('/predict_generate_files',methods=['POST'])
-@return_json
-def predict(files, rows_per_file, fileName):
-	response = make_response()
-	response.headers.add("Access-Control-Allow-Origin", "*")
-	response.headers.add('Access-Control-Allow-Headers', "*")
-	response.headers.add('Access-Control-Allow-Methods', "*")
-	
-    # Read in the holdout data into a Pandas DataFrame
-	df = pd.read_csv(holdoutData)
-
-	# Create the files withstarting with 01
-	i = 1
-	json_filenames = []
-
-	while i <= files:		
-		# Make sortable filenames (01, 02, 03 instead of 1, 2, 3)
-		namingNumber = "01"
-		if i < 10:
-			namingNumber = "0" + str(i)
-		else:
-			namingNumber = str(i)
-			
-		the_file = f'{baseFolder}/{fileName}{namingNumber}.csv'
-
-		try:
-			# Step 1: Let's delete any previous runs' files first:
-			os.remove(the_file)
-		except:
-			pass # How to do an empty except in Python			
+# @app.route('/predict_generate_files',methods=['POST'])
+# @return_json
+@api.route("/generate")
+class GenFiles(Resource):
+	def get(self):
+		response = make_response()
 		
-		# So we can pass what the names of the files created are back to front end
-		file_dict = {}
-		file_dict["fileName"] = the_file 
-		json_filenames.append(file_dict)
+		response = jsonify({ \
+			"status": "Error - GET not implemented"
+			, "info": "Using POST, pass howManyFiles, howManyRows, fileName" \
+		})
 
-		# Export to csv
-		df.sample(rows_per_file).to_csv(the_file)
-		i = i+1
+		response.headers.add("Access-Control-Allow-Origin", "*")
+		response.headers.add('Access-Control-Allow-Headers', "*")
+		response.headers.add('Access-Control-Allow-Methods', "*")
 
-    response = jsonify({"statusCode": 200, "Files": json_filenames})
-        
-    return response
+		return response
+	
+	@api.marshal_list_with(generate_fields)
+	@api.doc(body=generate_fields)
+	@api.doc(parser=parser_generate)
+	def put(self, generate_fields):
+		return [{'howManyFiles': howManyFiles, 'howManyRows': howManyRows, 'fileName': fileName} for howManyFiles, howManyRows, fileName in generate_fields.items()]
+		
+		response = make_response()
+		response.headers.add("Access-Control-Allow-Origin", "*")
+		response.headers.add('Access-Control-Allow-Headers', "*")
+		response.headers.add('Access-Control-Allow-Methods', "*")
+
+		# Read in the holdout data into a Pandas DataFrame
+		df = pd.read_csv(holdoutData)
+
+		# Create the files withstarting with 01
+		i = 1
+		json_filenames = []
+
+		while i <= files:
+			# Make sortable filenames (01, 02, 03 instead of 1, 2, 3)
+			namingNumber = "01"
+
+			if i < 10:
+				namingNumber = "0" + str(i)
+			else:
+				namingNumber = str(i)
+			
+			the_file = f'{baseFolder}/{fileName}{namingNumber}.csv'
+
+			try:
+			# Step 1: Let's delete any previous runs' files first:
+				os.remove(the_file)
+			except:
+				pass # How to do an empty except in Python
+
+			# So we can pass what the names of the files created are back to front end
+			file_dict = {}
+			file_dict["fileName"] = the_file
+			json_filenames.append(file_dict)
+
+			# Export to csv
+			df.sample(rows_per_file).to_csv(the_file)
+
+			# Get the next file or exit if processed last requested file
+			i = i+1
+
+		response = jsonify({"statusCode": 200, "Files": json_filenames})
+
+		return response
 
 #########################################################
 # Pass in the name of the file selected and the model will
 #    predict for you
 #########################################################
-@app.route('/predict',methods=['POST'])
-@return_json
-def predict(chosen_file):
-	response = make_response()
-	response.headers.add("Access-Control-Allow-Origin", "*")
-	response.headers.add('Access-Control-Allow-Headers', "*")
-	response.headers.add('Access-Control-Allow-Methods', "*")
-
-	try:
-    	data_unseen = pd.read_csv(f'{baseFolder}/{chosen_file}')
-
-	except:
+# @app.route('/predict',methods=['POST'])
+# @return_json
+@api.route("/predict")
+class PredictClass(Resource):
+	def get(self):
+		response = make_response()
+		
 		response = jsonify({ \
-			"statusCode": 404 \
-			, "status": f"Unable to find file '{chosen_file}'" \
+			"status": "Error - GET not implemented"
+			, "info": "Using POST, pass randomFile" \
 		})
-		return response
 
-    dfPredictions = predict_model(model, data=data_unseen, round = 4)
-    # prediction = int(prediction.Label[0])    
-    # output = prediction.Label[0]
+		response.headers.add("Access-Control-Allow-Origin", "*")
+		response.headers.add('Access-Control-Allow-Headers', "*")
+		response.headers.add('Access-Control-Allow-Methods', "*")
 
-	# Remove the previous index columns
-	dfPredictions.drop(['Unnamed: 0'], 1, inplace=True)
-	dfPredictions.drop(['Unnamed: 0.1'], 1, inplace=True)
+		api.abort(404, "GET not implemented")
 
-	response = jsonify({ \
-		"statusCode": 200  \
-		, "data": dfPredictions.to_json()  \
-	})
-	return response
-
-if __name__ == '__main__':
-    app.run(debug=True)
-
-
-
-
-
-
-
-
-
-=========== ML App app.py
-
-app = Api(app = flask_app, 
-		  version = "1.0", 
-		  title = "ML React App", 
-		  description = "Predict results using a trained model")
-
-name_space = app.namespace('prediction', description='Prediction APIs')
-
-model = app.model('Prediction params', 
-				  {'textField1': fields.String(required = True, 
-				  							   description="Text Field 1", 
-    					  				 	   help="Text Field 1 cannot be blank"),
-				  'textField2': fields.String(required = True, 
-				  							   description="Text Field 2", 
-    					  				 	   help="Text Field 2 cannot be blank"),
-				  'select1': fields.Integer(required = True, 
-				  							description="Select 1", 
-    					  				 	help="Select 1 cannot be blank"),
-				  'select2': fields.Integer(required = True, 
-				  							description="Select 2", 
-    					  				 	help="Select 2 cannot be blank"),
-				  'select3': fields.Integer(required = True, 
-				  							description="Select 3", 
-    					  				 	help="Select 3 cannot be blank")})
-
-# classifier = joblib.load('classifier.joblib')
-
-@name_space.route("/")
-class MainClass(Resource):
-
-	def options(self):
+#	@api.marshal_list_with(predict_fields)
+#	@api.doc(body=predict_fields)
+	#@api.doc(parser=parser_randomFile)
+	# @api.param('randomFile', 'The name of your file')
+	@api.doc(responses={404: 'randomFile not found'}, params={'randomFile': 'Name of the .csv file (MyFile01.csv)'})
+	def put(self, randomFile):
 		response = make_response()
 		response.headers.add("Access-Control-Allow-Origin", "*")
 		response.headers.add('Access-Control-Allow-Headers', "*")
 		response.headers.add('Access-Control-Allow-Methods', "*")
+		
+		# args = parser.parse_args(strict=True)
+
+		try:
+			data_unseen = pd.read_csv(f'{baseFolder}/{randomFile}')
+			# return jsonify({"randomFile": randomFile})
+		except:			
+			api.abort(404, f"File {randomFile} doesn't exist")
+
+		# Load the model w PyCaret
+		model = load_model(model_file)
+		dfPredictions = predict_model(model, data=data_unseen)
+		# prediction = int(prediction.Label[0])    
+		# output = prediction.Label[0]
+
+		# Remove the previous index columns
+		dfPredictions.drop(['Unnamed: 0'], 1, inplace=True)
+		dfPredictions.drop(['Unnamed: 0.1'], 1, inplace=True)
+
+		response = jsonify({ \
+			"statusCode": 200  \
+			, "data": dfPredictions.to_json()  \
+		})
 		return response
 
-	@app.expect(model)		
-	def post(self):
-		try: 
-			formData = request.json
-			data = [val for val in formData.values()]
-			# prediction = classifier.predict(data)
-			response = jsonify({
-				"statusCode": 200,
-				"status": "Prediction made",
-				"result": "Prediction: " + str(data)
-				})
-			response.headers.add('Access-Control-Allow-Origin', '*')
-			return response
-		except Exception as error:
-			return jsonify({
-				"statusCode": 500,
-				"status": "Could not make prediction",
-				"error": str(error)
-			})
+api.add_resource(PredictClass, '/predict/<string:randomFile>')
+
+if __name__ == '__main__':
+    app.run(debug=True)
