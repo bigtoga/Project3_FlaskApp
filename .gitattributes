@@ -1,0 +1,14 @@
+*.csv filter=lfs diff=lfs merge=lfs -text
+*.xlsx filter=lfs diff=lfs merge=lfs -text
+*.xls filter=lfs diff=lfs merge=lfs -text
+*.pkl filter=lfs diff=lfs merge=lfs -text
+*.txt filter=lfs diff=lfs merge=lfs -text
+*.twbx filter=lfs diff=lfs merge=lfs -text
+*.db filter=lfs diff=lfs merge=lfs -text
+*.sqlite filter=lfs diff=lfs merge=lfs -text
+*.sqldb filter=lfs diff=lfs merge=lfs -text
+*.twb filter=lfs diff=lfs merge=lfs -text
+*.hyper filter=lfs diff=lfs merge=lfs -text
+*.tde filter=lfs diff=lfs merge=lfs -text
+*.tds filter=lfs diff=lfs merge=lfs -text
+*.tdsx filter=lfs diff=lfs merge=lfs -text
