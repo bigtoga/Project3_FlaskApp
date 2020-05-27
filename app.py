@@ -66,11 +66,6 @@ generate_fields = api.model('Generate Files', {
 		)
 })
 
-parser_generate = api.parser()
-parser_generate.add_argument('howManyFiles', type=int, required=True, help='Must be 1-10', location='form')
-parser_generate.add_argument('howManyRows', type=int, required=True, help='Must be 10-100', location='form')
-parser_generate.add_argument('fileName', type=str, required=True, help='Must be 5+ characters', location='form')
-
 predict_fields = api.model('Predict Inputs', {
     'randomFile': fields.String(
 			required = True
@@ -78,9 +73,6 @@ predict_fields = api.model('Predict Inputs', {
 			, help="Required field"
 		)
 })
-
-parser_randomFile = api.parser()
-parser_randomFile.add_argument('randomFile', type=str, required=True, help='The random file', location='form')
 
 #########################################################    
 # Pass in the answers and this method will create the 
@@ -104,25 +96,53 @@ class GenFiles(Resource):
 
 		return response
 	
-	@api.marshal_list_with(generate_fields)
+#	@api.marshal_list_with(generate_fields)
 	@api.doc(body=generate_fields)
-	@api.doc(parser=parser_generate)
-	def put(self, generate_fields):
-		return [{'howManyFiles': howManyFiles, 'howManyRows': howManyRows, 'fileName': fileName} for howManyFiles, howManyRows, fileName in generate_fields.items()]
-		
+#	@api.doc(parser=parser_generate)
+	def put(self):
 		response = make_response()
 		response.headers.add("Access-Control-Allow-Origin", "*")
 		response.headers.add('Access-Control-Allow-Headers', "*")
 		response.headers.add('Access-Control-Allow-Methods', "*")
 
-		# Read in the holdout data into a Pandas DataFrame
-		df = pd.read_csv(holdoutData)
+		try:
+			formData = request.json
+			howManyFiles = formData["howManyFiles"]
+			howManyRows = formData["howManyRows"]
+			fileName = formData["fileName"]
+		except: 
+			api.abort(500, "Form must pass howManyFiles, howManyRows, and fileName")
+
+		try:
+			howManyFiles = int(howManyFiles)
+		except: 
+			api.abort(500, "howManyFiles is not an integer")
+		
+		if howManyFiles < 1 or howManyFiles > 10:
+			api.abort(500, "howManyFiles must be between 1 and 10")
+			
+		try:
+			howManyRows = int(howManyRows)
+		except: 
+			api.abort(500, "howManyRows is not an integer")
+		
+		if howManyRows < 1 or howManyRows > 10:
+			api.abort(500, "howManyRows must be between 1 and 10")
+		
+		if len(fileName) < 3 or len(fileName) > 10:
+			api.abort(500, "fileName must be between 3 and 10 characters")
+
+		try: 
+			# Read in the holdout data into a Pandas DataFrame
+			df = pd.read_csv(holdoutData)
+		except: 
+			api.abort(500, f"Unable to read holdoutData {holdoutData}")
 
 		# Create the files withstarting with 01
 		i = 1
 		json_filenames = []
 
-		while i <= files:
+		while i <= howManyFiles:
 			# Make sortable filenames (01, 02, 03 instead of 1, 2, 3)
 			namingNumber = "01"
 
@@ -145,7 +165,7 @@ class GenFiles(Resource):
 			json_filenames.append(file_dict)
 
 			# Export to csv
-			df.sample(rows_per_file).to_csv(the_file)
+			df.sample(howManyRows).to_csv(the_file)
 
 			# Get the next file or exit if processed last requested file
 			i = i+1
@@ -177,7 +197,7 @@ class PredictClass(Resource):
 		api.abort(404, "GET not implemented")
 
 #	@api.marshal_list_with(predict_fields)
-#	@api.doc(body=predict_fields)
+	@api.doc(body=predict_fields)
 	#@api.doc(parser=parser_randomFile)
 	# @api.param('randomFile', 'The name of your file')
 	@api.doc(responses={404: 'randomFile not found'}, params={'randomFile': 'Name of the .csv file (MyFile01.csv)'})

@@ -17,4 +17,4 @@ curl "http://127.0.0.1:5000/generate"
 
 # /generate - PUT - passing no parameters
 # howManyFiles, howManyRows, fileName
-curl "http://127.0.0.1:5000/generate" -d"howManyFiles=10" -d"howManyRows=10" -d"fileName=Scott.txt" -X PUT
+curl "http://127.0.0.1:5000/generate" -d '{"howManyFiles":"2", "howManyRows":"10", "fileName": "Scott"}' -H "Content-Type: application/json" -X PUT
