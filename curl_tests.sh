@@ -6,6 +6,11 @@
 # GET
 curl "http://127.0.0.1:5000/predict"
 
+# PUT - passing all parameters
+# howManyFiles, howManyRows, fileName, randomFile
+curl "http://127.0.0.1:5000/predict" -d '{"howManyFiles":"2", "howManyRows":"10", "fileName": "curlTest", "randomFile": "curlTest02.csv"}' -H "Content-Type: application/json" -X PUT
+
+
 # PUT - passing right parameter
 curl "http://127.0.0.1:5000/predict/testing05.csv" -X PUT
 
