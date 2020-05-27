@@ -17,6 +17,7 @@ call pip install flask==1.1.1
 call pip install flask_restplus
 call pip install pycaret
 call pip install pickle
+call pip install flask_wtf 
 
 rem known issue in flask
 rem call pip uninstall werkzeug --yes 
@@ -28,3 +29,5 @@ call conda info
 rem display the installed packages
 call conda -n %envName% -pkg-name "Flask"
 call pip list
+
+python app.py
