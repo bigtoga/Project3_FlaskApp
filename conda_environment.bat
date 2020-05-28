@@ -17,7 +17,7 @@ call pip install flask==1.1.1
 call pip install flask_restplus
 call pip install pycaret
 call pip install pickle
-call pip install flask_wtf 
+call pip install gunicorn
 
 rem known issue in flask
 rem call pip uninstall werkzeug --yes 
